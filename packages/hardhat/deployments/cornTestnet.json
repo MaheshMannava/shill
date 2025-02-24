@@ -1,0 +1,9 @@
+{
+  "network": "cornTestnet",
+  "chainId": "21000001",
+  "contractAddress": "0x3B5A58D4388ed661F1F9FE479D3Cbf28E1d8AF29",
+  "deployerAddress": "0xd4E41a10bECD90434bD1f2C0Bc65d25fec5629D1",
+  "deploymentTime": "2025-02-23T22:57:36.110Z",
+  "blockNumber": "134275",
+  "transactionHash": "0x1e1fc6ed52d87bfdfc3e19a4b3ab50c43e0daf3d11f853ee91b638382a841c2f"
+}
