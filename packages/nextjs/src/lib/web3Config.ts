@@ -1,6 +1,6 @@
 import { http, createConfig } from 'wagmi';
 import { mainnet, sepolia } from 'wagmi/chains';
-import { injected, walletConnect } from 'wagmi/connectors';
+import { injected } from 'wagmi/connectors';
 
 // Define Corn Testnet
 export const cornTestnet = {
@@ -33,9 +33,6 @@ export const config = createConfig({
     [cornTestnet.id]: http()
   },
   connectors: [
-    injected(),
-    walletConnect({
-      projectId: '4b6eecf33c435bb26b65993ce811ec6e',
-    })
+    injected()
   ]
 });

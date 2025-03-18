@@ -69,16 +69,18 @@ export function WalletDialog({
 
             {/* Wallet options */}
             <div className="p-4 space-y-[6px] bg-[#a3a3a3]">
-              {connectors.map((connector) => (
+              {connectors
+                .filter(connector => connector.name.toLowerCase() !== 'phantom') // Filter out Phantom wallet
+                .map((connector) => (
                 <button
                   key={connector.id}
                   onClick={() => handleConnect(connector.id)}
-                  disabled={status === 'connecting'}
+                  disabled={status === 'pending'}
                   className="w-full h-12 px-4 hover:bg-gray-50 border border-[#E6E6E6] flex items-center justify-between font-serif bg-[#cfcfcf] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <span>
                     {connector.name.toUpperCase()}
-                    {status === 'connecting' && " (connecting...)"}
+                    {status === 'pending' && " (connecting...)"}
                   </span>
                   <span className="text-lg">→</span>
                 </button>
