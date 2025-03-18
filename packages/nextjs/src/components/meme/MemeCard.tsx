@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ThumbsDown, ThumbsUp, Ticket } from "lucide-react";
 import { MemeDialog } from "./MemeDialog";
 import { useContract } from "@/hooks/useContract";
+import { useAccount } from "wagmi";
+import { useTicketBalance } from "@/hooks/useTicketBalance";
+import { CONTRACTS } from "@/config/contracts";
 
 export interface MemeCardProps {
   id: number;
@@ -42,10 +45,49 @@ export function MemeCard({
 }: MemeCardProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [isVoting, setIsVoting] = useState(false);
+  const [userVote, setUserVote] = useState<string | null>(null);
   const { voteMeme } = useContract();
+  const { address } = useAccount();
+  const { ticketBalance } = useTicketBalance();
+
+  // Check if the user has already voted on this meme
+  useEffect(() => {
+    if (!address) return;
+    
+    const votesKey = `votes_${eventId}_${memeId}_${address.toLowerCase()}`;
+    const savedVote = localStorage.getItem(votesKey);
+    setUserVote(savedVote);
+  }, [eventId, memeId, address]);
+
+  // Check if user is the creator
+  const isCreator = address && creator && address.toLowerCase() === creator.toLowerCase();
 
   const handleVote = async (isUpvote: boolean, e: React.MouseEvent) => {
     e.stopPropagation();
+    
+    // Check if user is creator - show message if they try to vote on their own meme
+    if (isCreator) {
+      alert("You cannot vote on your own meme");
+      return;
+    }
+    
+    // Check if user is connected
+    if (!address) {
+      alert("Please connect your wallet to vote");
+      return;
+    }
+    
+    // Check if user has already voted the same way
+    if ((isUpvote && userVote === "up") || (!isUpvote && userVote === "down")) {
+      alert(`You've already voted ${isUpvote ? "up" : "down"} on this meme`);
+      return;
+    }
+    
+    // Check if user has enough tickets for a new vote (changing vote doesn't cost)
+    if (!userVote && (ticketBalance === null || ticketBalance < 1)) {
+      alert("You don't have enough tickets to vote. Voting costs 1 ticket.");
+      return;
+    }
     
     try {
       setIsVoting(true);
@@ -56,8 +98,13 @@ export function MemeCard({
       
       console.log(`Vote transaction submitted: ${txHash}`);
       
-      // Wait for transaction to be confirmed
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Update local user vote state
+      if (address) {
+        const votesKey = `votes_${eventId}_${memeId}_${address.toLowerCase()}`;
+        const currentVote = isUpvote ? "up" : "down";
+        localStorage.setItem(votesKey, currentVote);
+        setUserVote(currentVote);
+      }
       
       // Refresh memes after voting
       if (onVoteSuccess) {
@@ -65,6 +112,7 @@ export function MemeCard({
       }
     } catch (error) {
       console.error("Error voting:", error);
+      alert(error instanceof Error ? error.message : "Error voting on meme");
     } finally {
       setIsVoting(false);
     }
@@ -85,6 +133,9 @@ export function MemeCard({
           <div className="flex-1 font-serif">
             <div className="flex items-center gap-2 mb-2">
               <h3 className="text-xl font-bold">${symbol}</h3>
+              {isCreator && (
+                <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">Creator</span>
+              )}
             </div>
             <p className="text-sm text-gray-600 mb-4">{description}</p>
             <div className="flex items-center justify-between">
@@ -92,9 +143,12 @@ export function MemeCard({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="bg-[#2563EB] text-white hover:bg-blue-700 rounded-none"
+                  className={`${userVote === "down" 
+                    ? "bg-blue-700 text-white" 
+                    : "bg-[#2563EB] text-white hover:bg-blue-700"} rounded-none`}
                   onClick={(e) => handleVote(false, e)}
-                  disabled={isVoting}
+                  disabled={isVoting || isCreator}
+                  title={isCreator ? "Cannot vote on your own meme" : ""}
                 >
                   <ThumbsDown className="h-4 w-4" />
                   {downvotes > 0 && <span className="ml-1">{downvotes}</span>}
@@ -110,9 +164,12 @@ export function MemeCard({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="bg-orange-500 text-white hover:bg-orange-600 rounded-none"
+                  className={`${userVote === "up" 
+                    ? "bg-orange-700 text-white" 
+                    : "bg-orange-500 text-white hover:bg-orange-600"} rounded-none`}
                   onClick={(e) => handleVote(true, e)}
-                  disabled={isVoting}
+                  disabled={isVoting || isCreator}
+                  title={isCreator ? "Cannot vote on your own meme" : ""}
                 >
                   <ThumbsUp className="h-4 w-4" />
                   {upvotes > 0 && <span className="ml-1">{upvotes}</span>}
@@ -141,6 +198,8 @@ export function MemeCard({
         eventId={eventId}
         memeId={memeId}
         onVoteSuccess={onVoteSuccess}
+        userVote={userVote}
+        isCreator={isCreator}
       />
     </>
   );

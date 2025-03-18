@@ -314,11 +314,6 @@ export const useContract = () => {
         const storedBalance = localStorage.getItem(storageKey);
         const currentBalance = storedBalance ? parseInt(storedBalance) : 100;
 
-        // Check if user has enough crop tokens for voting
-        if (currentBalance < 1) {
-          throw new Error("Insufficient CROP");
-        }
-
         // Get the memes from local storage
         const memesKey = `memes_${eventId}`;
         const storedMemes = localStorage.getItem(memesKey);
@@ -341,27 +336,69 @@ export const useContract = () => {
         const votesKey = `votes_${eventId}_${memeId}_${address.toLowerCase()}`;
         const userVote = localStorage.getItem(votesKey);
         
-        // Check if user has already voted on this meme
+        // Handle changing votes
         if (userVote) {
-          throw new Error("Already voted on this meme");
-        }
-
-        // Deduct the voting cost
-        const newBalance = currentBalance - 1;
-        localStorage.setItem(storageKey, newBalance.toString());
-
-        // Record the vote
-        localStorage.setItem(votesKey, isUpvote ? "up" : "down");
-
-        // Update the meme's vote count
-        if (isUpvote) {
-          meme.upvotes += 1;
-          if (!meme.upvoters) {
-            meme.upvoters = [];
+          // User already voted - check if they're trying to change their vote
+          const previousVote = userVote === "up";
+          
+          // If trying to vote the same way, throw an error
+          if (previousVote === isUpvote) {
+            throw new Error(`You've already voted ${isUpvote ? 'up' : 'down'} on this meme`);
           }
-          meme.upvoters.push(address);
+          
+          // User is changing their vote, no need to deduct CROP tokens again
+          // Remove the previous vote
+          if (previousVote) {
+            // Previous vote was upvote, remove it
+            meme.upvotes = Math.max(0, meme.upvotes - 1);
+            
+            // Remove from upvoters array if it exists
+            if (meme.upvoters) {
+              meme.upvoters = meme.upvoters.filter((voter: string) => 
+                voter.toLowerCase() !== address.toLowerCase()
+              );
+            }
+          } else {
+            // Previous vote was downvote, remove it
+            meme.downvotes = Math.max(0, meme.downvotes - 1);
+          }
+          
+          // Add the new vote
+          if (isUpvote) {
+            meme.upvotes += 1;
+            if (!meme.upvoters) {
+              meme.upvoters = [];
+            }
+            meme.upvoters.push(address);
+          } else {
+            meme.downvotes += 1;
+          }
+          
+          // Update the vote record
+          localStorage.setItem(votesKey, isUpvote ? "up" : "down");
         } else {
-          meme.downvotes += 1;
+          // New vote - check if user has enough CROP tokens
+          if (currentBalance < 1) {
+            throw new Error("Insufficient CROP");
+          }
+          
+          // Deduct the voting cost (only for new votes)
+          const newBalance = currentBalance - 1;
+          localStorage.setItem(storageKey, newBalance.toString());
+          
+          // Record the vote
+          localStorage.setItem(votesKey, isUpvote ? "up" : "down");
+          
+          // Update the meme's vote count
+          if (isUpvote) {
+            meme.upvotes += 1;
+            if (!meme.upvoters) {
+              meme.upvoters = [];
+            }
+            meme.upvoters.push(address);
+          } else {
+            meme.downvotes += 1;
+          }
         }
 
         // Save the updated memes back to local storage

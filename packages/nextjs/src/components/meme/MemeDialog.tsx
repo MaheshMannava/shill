@@ -6,6 +6,8 @@ import { DialogPortal } from "@radix-ui/react-dialog";
 import { ArrowLeft, Ticket, ThumbsDown, ThumbsUp } from "lucide-react";
 import { useContract } from "@/hooks/useContract";
 import { formatDistanceToNow } from "date-fns";
+import { useTicketBalance } from "@/hooks/useTicketBalance";
+import { useAccount } from "wagmi";
 
 export interface MemeDialogProps {
   open?: boolean;
@@ -21,6 +23,8 @@ export interface MemeDialogProps {
   eventId?: string;
   memeId?: number;
   onVoteSuccess?: () => void;
+  userVote?: string | null;
+  isCreator?: boolean;
 }
 
 interface Comment {
@@ -61,12 +65,40 @@ export function MemeDialog({
   eventId = "",
   memeId = 0,
   onVoteSuccess,
+  userVote = null,
+  isCreator = false,
 }: MemeDialogProps) {
   const [isVoting, setIsVoting] = useState(false);
   const { voteMeme } = useContract();
+  const { ticketBalance } = useTicketBalance();
+  const { address } = useAccount();
   
   const handleVote = async (isUpvote: boolean) => {
     if (!eventId || !memeId) return;
+    
+    // Check if user is creator - show message if they try to vote on their own meme
+    if (isCreator) {
+      alert("You cannot vote on your own meme");
+      return;
+    }
+    
+    // Check if user is connected
+    if (!address) {
+      alert("Please connect your wallet to vote");
+      return;
+    }
+    
+    // Check if user has already voted the same way
+    if ((isUpvote && userVote === "up") || (!isUpvote && userVote === "down")) {
+      alert(`You've already voted ${isUpvote ? "up" : "down"} on this meme`);
+      return;
+    }
+    
+    // Check if user has enough tickets for a new vote (changing vote doesn't cost)
+    if (!userVote && (ticketBalance === null || ticketBalance < 1)) {
+      alert("You don't have enough tickets to vote. Voting costs 1 ticket.");
+      return;
+    }
     
     try {
       setIsVoting(true);
@@ -77,15 +109,13 @@ export function MemeDialog({
       
       console.log(`Vote transaction submitted: ${txHash}`);
       
-      // Wait for transaction to be confirmed
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
       // Refresh memes after voting
       if (onVoteSuccess) {
         onVoteSuccess();
       }
     } catch (error) {
       console.error("Error voting:", error);
+      alert(error instanceof Error ? error.message : "Error voting on meme");
     } finally {
       setIsVoting(false);
     }
@@ -115,6 +145,9 @@ export function MemeDialog({
                 <ArrowLeft className="h-5 w-5" />
               </button>
               <span className="text-xl font-serif">${symbol}</span>
+              {isCreator && (
+                <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">Creator</span>
+              )}
             </div>
 
             {/* Meme content */}
@@ -129,9 +162,12 @@ export function MemeDialog({
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex gap-2">
                       <button 
-                        className="bg-blue-600 text-white px-4 py-1 rounded flex items-center gap-1"
+                        className={`${userVote === "down" 
+                          ? "bg-blue-700" 
+                          : "bg-blue-600"} text-white px-4 py-1 rounded flex items-center gap-1`}
                         onClick={() => handleVote(false)}
-                        disabled={isVoting}
+                        disabled={isVoting || isCreator}
+                        title={isCreator ? "Cannot vote on your own meme" : ""}
                       >
                         <ThumbsDown className="h-4 w-4" />
                         {downvotes > 0 && <span>{downvotes}</span>}
@@ -140,9 +176,12 @@ export function MemeDialog({
                         <Ticket className="h-4 w-4" />
                       </button>
                       <button 
-                        className="bg-orange-500 text-white px-4 py-1 rounded flex items-center gap-1"
+                        className={`${userVote === "up" 
+                          ? "bg-orange-700" 
+                          : "bg-orange-500"} text-white px-4 py-1 rounded flex items-center gap-1`}
                         onClick={() => handleVote(true)}
-                        disabled={isVoting}
+                        disabled={isVoting || isCreator}
+                        title={isCreator ? "Cannot vote on your own meme" : ""}
                       >
                         <ThumbsUp className="h-4 w-4" />
                         {upvotes > 0 && <span>{upvotes}</span>}
