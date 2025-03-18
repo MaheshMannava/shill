@@ -157,13 +157,13 @@ function Home() {
           </button>
         </div>
         
-        <div className="w-full max-w-4xl mx-auto bg-[#b3b3b3]">
+        <div className="w-full max-w-4xl mx-auto">
           {memes.length > 0 ? (
             memes.map((meme) => (
               <MemeCard 
                 key={meme.id} 
                 {...meme} 
-                className="bg-[#b6b6b6]" 
+                className="" 
                 eventId={EVENT_ID}
                 memeId={meme.id}
                 onVoteSuccess={handleMemeSubmitted}

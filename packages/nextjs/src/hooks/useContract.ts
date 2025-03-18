@@ -346,7 +346,16 @@ export const useContract = () => {
             throw new Error(`You've already voted ${isUpvote ? 'up' : 'down'} on this meme`);
           }
           
-          // User is changing their vote, no need to deduct CROP tokens again
+          // User is changing their vote, charge a CROP token again
+          // Check if user has enough CROP tokens
+          if (currentBalance < 1) {
+            throw new Error("Insufficient CROP");
+          }
+          
+          // Deduct the voting cost for changing the vote
+          const newBalance = currentBalance - 1;
+          localStorage.setItem(storageKey, newBalance.toString());
+          
           // Remove the previous vote
           if (previousVote) {
             // Previous vote was upvote, remove it

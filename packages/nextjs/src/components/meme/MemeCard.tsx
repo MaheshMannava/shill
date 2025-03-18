@@ -121,7 +121,7 @@ export function MemeCard({
   return (
     <>
       <Card
-        className={`w-full bg-[#FFFFFF] shadow-md p-4 mb-4 cursor-pointer hover:bg-gray-50 rounded-none ${className || ''}`}
+        className={`w-full bg-[#FFFFFF] p-4 mb-4 cursor-pointer hover:bg-gray-50 rounded-none border-0 shadow-none ${className || ''}`}
         onClick={() => setDialogOpen(true)}
       >
         <div className="flex gap-4 bg-white">

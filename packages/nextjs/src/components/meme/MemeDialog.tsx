@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { DialogPortal } from "@radix-ui/react-dialog";
 import { ArrowLeft, Ticket, ThumbsDown, ThumbsUp } from "lucide-react";
@@ -30,26 +30,8 @@ export interface MemeDialogProps {
 interface Comment {
   address: string;
   text: string;
+  timestamp: number;
 }
-
-const comments: Comment[] = [
-  {
-    address: "0x3849504xcw3932...",
-    text: "Whoa, this meme is tight!",
-  },
-  {
-    address: "0x943r3299dfv9d51...",
-    text: "Interesting choice to change the letter M to N.",
-  },
-  {
-    address: "0x8430448jjn52851...",
-    text: "This looks like a promising investment",
-  },
-  {
-    address: "0x63890472jn292m1...",
-    text: "PINP is the strategic reserve chosen by Mr. Trump!",
-  },
-];
 
 export function MemeDialog({
   open = false,
@@ -69,9 +51,104 @@ export function MemeDialog({
   isCreator = false,
 }: MemeDialogProps) {
   const [isVoting, setIsVoting] = useState(false);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [commentText, setCommentText] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const commentsRef = useRef<HTMLDivElement>(null);
+  
   const { voteMeme } = useContract();
   const { ticketBalance } = useTicketBalance();
   const { address } = useAccount();
+  
+  // Load comments when dialog opens
+  useEffect(() => {
+    if (!open || !eventId || !memeId) return;
+    
+    // Load existing comments from localStorage
+    loadComments();
+    
+    // Set up the real-time event listener
+    const handleNewComment = () => {
+      loadComments();
+    };
+    
+    // Listen for new comments
+    window.addEventListener('newComment', handleNewComment);
+    
+    return () => {
+      window.removeEventListener('newComment', handleNewComment);
+    };
+  }, [open, eventId, memeId]);
+  
+  // Auto-scroll to bottom when new comments are added
+  useEffect(() => {
+    if (commentsRef.current) {
+      commentsRef.current.scrollTop = commentsRef.current.scrollHeight;
+    }
+  }, [comments]);
+  
+  const loadComments = () => {
+    if (!eventId || !memeId) return;
+    
+    const commentsKey = `comments_${eventId}_${memeId}`;
+    const storedComments = localStorage.getItem(commentsKey);
+    
+    if (storedComments) {
+      try {
+        const parsedComments = JSON.parse(storedComments);
+        setComments(parsedComments);
+      } catch (e) {
+        console.error("Error parsing comments:", e);
+        setComments([]);
+      }
+    } else {
+      setComments([]);
+    }
+  };
+  
+  const handleSubmitComment = async () => {
+    if (!commentText.trim() || !eventId || !memeId || !address) return;
+    
+    setIsSubmitting(true);
+    
+    try {
+      // Create new comment
+      const newComment: Comment = {
+        address: address,
+        text: commentText.trim(),
+        timestamp: Date.now()
+      };
+      
+      // Get existing comments
+      const commentsKey = `comments_${eventId}_${memeId}`;
+      const storedComments = localStorage.getItem(commentsKey);
+      const existingComments: Comment[] = storedComments ? JSON.parse(storedComments) : [];
+      
+      // Add new comment
+      const updatedComments = [...existingComments, newComment];
+      
+      // Save back to localStorage
+      localStorage.setItem(commentsKey, JSON.stringify(updatedComments));
+      
+      // Update local state
+      setComments(updatedComments);
+      setCommentText("");
+      
+      // Notify other instances about the new comment
+      window.dispatchEvent(new CustomEvent('newComment'));
+    } catch (error) {
+      console.error("Error submitting comment:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+  
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmitComment();
+    }
+  };
   
   const handleVote = async (isUpvote: boolean) => {
     if (!eventId || !memeId) return;
@@ -122,11 +199,24 @@ export function MemeDialog({
   };
   
   // Format the timestamp to a human-readable format
-  const timeAgo = timestamp ? formatDistanceToNow(new Date(timestamp), { addSuffix: true }) : '';
+  // Check if timestamp is in milliseconds or seconds format and convert accordingly
+  const formatTimestamp = (timestamp: number) => {
+    // If timestamp is in seconds (Unix timestamp), convert to milliseconds
+    // Unix timestamps are typically 10 digits, while JS timestamps are 13 digits
+    const timestampInMs = timestamp < 10000000000 ? timestamp * 1000 : timestamp;
+    return formatDistanceToNow(new Date(timestampInMs), { addSuffix: true });
+  };
+  
+  const timeAgo = timestamp ? formatTimestamp(timestamp) : '';
   
   // Truncate the creator address for display
   const truncatedCreator = creator ? 
     `${creator.substring(0, 6)}...${creator.substring(creator.length - 4)}` : '';
+    
+  // Function to truncate comment address
+  const truncateAddress = (address: string) => {
+    return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -205,15 +295,24 @@ export function MemeDialog({
                 <div className="text-xs text-gray-500 mb-2">
                   Comments
                 </div>
-                <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                  {comments.map((comment, i) => (
-                    <div key={i} className="flex gap-2">
-                      <span className="text-xs text-blue-500">
-                        {comment.address}
-                      </span>
-                      <span className="text-xs">{comment.text}</span>
+                <div 
+                  ref={commentsRef}
+                  className="space-y-2 max-h-[200px] overflow-y-auto"
+                >
+                  {comments.length === 0 ? (
+                    <div className="text-xs text-gray-400 text-center py-4">
+                      No comments yet. Be the first to comment!
                     </div>
-                  ))}
+                  ) : (
+                    comments.map((comment, i) => (
+                      <div key={i} className="flex gap-2">
+                        <span className="text-xs text-blue-500 whitespace-nowrap">
+                          {truncateAddress(comment.address)}
+                        </span>
+                        <span className="text-xs break-words">{comment.text}</span>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
@@ -224,8 +323,16 @@ export function MemeDialog({
                 type="text"
                 placeholder="Add a comment..."
                 className="flex-1 px-3 py-2 border border-[#E6E6E6] text-xs"
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                onKeyDown={handleKeyPress}
+                disabled={!address || isSubmitting}
               />
-              <button className="bg-blue-600 text-white px-6 py-2 font-serif">
+              <button 
+                className="bg-blue-600 text-white px-6 py-2 font-serif disabled:opacity-50"
+                onClick={handleSubmitComment}
+                disabled={!commentText.trim() || !address || isSubmitting}
+              >
                 SEND
               </button>
             </div>
