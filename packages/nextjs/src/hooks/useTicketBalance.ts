@@ -1,119 +1,65 @@
 import { useState, useEffect } from 'react';
-import { useAccount, useContractRead, useContractWrite } from 'wagmi';
+import { useAccount } from 'wagmi';
 import { CONTRACTS } from '@/config/contracts';
 
-// Import only the ABI types we need
-const ABI = [
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      },
-      {
-        "internalType": "bytes32",
-        "name": "",
-        "type": "bytes32"
-      }
-    ],
-    "name": "userCropBalance",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "bytes32",
-        "name": "_eventId",
-        "type": "bytes32"
-      },
-      {
-        "internalType": "string",
-        "name": "_name",
-        "type": "string"
-      },
-      {
-        "internalType": "string",
-        "name": "_imageHash",
-        "type": "string"
-      },
-      {
-        "internalType": "string",
-        "name": "_description",
-        "type": "string"
-      }
-    ],
-    "name": "submitMeme",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  }
-] as const;
+// Define the event ID from contracts config
+const EVENT_ID = CONTRACTS.CROP_CIRCLE.EVENT_ID;
 
 export function useTicketBalance() {
   const { address, isConnected } = useAccount();
   const [ticketBalance, setTicketBalance] = useState<number | null>(null);
 
-  // Read the current balance
-  const { data: balance, error } = useContractRead({
-    address: CONTRACTS.CROP_CIRCLE.ADDRESS,
-    abi: ABI,
-    functionName: 'userCropBalance',
-    args: [address || '0x0000000000000000000000000000000000000000', CONTRACTS.CROP_CIRCLE.EVENT_ID],
-    enabled: isConnected && !!address,
-    watch: true,
-  });
-
-  // If balance is 0, submit a dummy meme to initialize balance
-  const { write: submitMeme } = useContractWrite({
-    address: CONTRACTS.CROP_CIRCLE.ADDRESS,
-    abi: ABI,
-    functionName: 'submitMeme',
-  });
-
   useEffect(() => {
-    try {
-      if (!isConnected) {
-        setTicketBalance(null); // No balance shown when disconnected
-        return;
-      }
-
-      if (error) {
-        console.error('Error reading ticket balance:', error);
-        setTicketBalance(100); // Fallback to 100 on error while connected
-        return;
-      }
-
-      if (balance !== undefined) {
-        const currentBalance = Number(balance);
-        if (currentBalance === 0) {
-          // If balance is 0, submit a dummy meme to initialize balance to 100
-          submitMeme({
-            args: [
-              CONTRACTS.CROP_CIRCLE.EVENT_ID,
-              'Initial Meme',
-              'QmInitial',
-              'Initial meme to get CROP tokens'
-            ],
-          });
-          setTicketBalance(100); // Show 100 while transaction is pending
-        } else {
-          setTicketBalance(currentBalance);
-        }
-      }
-    } catch (err) {
-      console.error('Error processing ticket balance:', err);
-      setTicketBalance(100); // Fallback to 100 on error while connected
+    if (!isConnected || !address) {
+      setTicketBalance(null);
+      return;
     }
-  }, [balance, isConnected, error, submitMeme]);
 
-  return ticketBalance;
+    // Use local storage to track balances
+    const storageKey = `cropBalance_${EVENT_ID}_${address.toLowerCase()}`;
+    const storedBalance = localStorage.getItem(storageKey);
+    
+    if (storedBalance) {
+      // If we already have a balance, use it
+      setTicketBalance(parseInt(storedBalance));
+    } else {
+      // Initialize with 100 tickets for new users
+      localStorage.setItem(storageKey, '100');
+      setTicketBalance(100);
+    }
+
+    // Listen for balance changes (from submissions and votes)
+    const handleBalanceChange = () => {
+      const updatedBalance = localStorage.getItem(storageKey);
+      if (updatedBalance) {
+        setTicketBalance(parseInt(updatedBalance));
+      }
+    };
+
+    // Set up event listener for balance changes
+    window.addEventListener('cropBalanceChanged', handleBalanceChange);
+
+    return () => {
+      window.removeEventListener('cropBalanceChanged', handleBalanceChange);
+    };
+  }, [address, isConnected]);
+
+  // Function to update ticket balance (for use in other components)
+  const updateTicketBalance = (newBalance: number) => {
+    if (!address) return;
+    
+    const storageKey = `cropBalance_${EVENT_ID}_${address.toLowerCase()}`;
+    localStorage.setItem(storageKey, newBalance.toString());
+    setTicketBalance(newBalance);
+    
+    // Dispatch event to notify other components
+    window.dispatchEvent(new CustomEvent('cropBalanceChanged'));
+  };
+
+  // Function to check if user has enough tickets
+  const hasEnoughTickets = (amount: number): boolean => {
+    return ticketBalance !== null && ticketBalance >= amount;
+  };
+
+  return { ticketBalance, updateTicketBalance, hasEnoughTickets };
 }

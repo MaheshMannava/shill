@@ -8,10 +8,19 @@ import { CreateMemeDialog } from "./CreateMemeDialog";
 
 interface CreateMemeButtonProps {
   ticketCost?: number;
+  eventId: string;
+  onMemeSubmitted?: () => void;
 }
 
-export function CreateMemeButton({ ticketCost = 60 }: CreateMemeButtonProps) {
+export function CreateMemeButton({ ticketCost = 60, eventId, onMemeSubmitted }: CreateMemeButtonProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
+  
+  const handleOpenChange = (open: boolean) => {
+    setDialogOpen(open);
+    if (!open && onMemeSubmitted) {
+      onMemeSubmitted();
+    }
+  };
 
   return (
     <div className="w-full max-w-4xl mx-auto mb-6">
@@ -30,7 +39,12 @@ export function CreateMemeButton({ ticketCost = 60 }: CreateMemeButtonProps) {
           </Button>
         </div>
       </Card>
-      <CreateMemeDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+      <CreateMemeDialog 
+        open={dialogOpen} 
+        onOpenChange={handleOpenChange} 
+        eventId={eventId} 
+        onMemeSubmitted={onMemeSubmitted} 
+      />
     </div>
   );
 }

@@ -15,7 +15,7 @@ export function Header(props: HeaderProps) {
   const [walletOpen, setWalletOpen] = useState(false);
   const { address, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
-  const ticketBalance = useTicketBalance(); // Will be null when disconnected
+  const { ticketBalance } = useTicketBalance(); // Will be null when disconnected
 
   const truncateAddress = (addr: string) => {
     if (!addr) return '';
